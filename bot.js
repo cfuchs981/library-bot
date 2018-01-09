@@ -1,10 +1,22 @@
-//TODO: link to database, get rid of arrays. Add remove or edit commands. Delete command messages? 
 
 var Discord = require('discord.io');
 var logger = require('winston');
 var auth = require('./auth.json');
-var fs = require('fs');
+var mysql = require('mysql'); 
 
+//set up database
+const con = mysql.createConnection({
+  host: 'your-host', 
+  user: 'your-username',
+  password: 'your-password',
+  database: 'mysql',
+  port: your-port-num //done bc running locally 
+});
+//ensure it can connect 
+con.connect(function(err) {
+  if (err) throw err;
+  console.log("Connected!");
+});
 
 //Set up discord bot 
 logger.remove(logger.transports.Console);
@@ -19,25 +31,6 @@ var bot = new Discord.Client({
 });
 
 
-/* 
-Create arrays for each language you want to store sources too. 
-Currently this discord bot is meant to stay online, updating the arrays and saving to an external file in case the info is lost. 
-A better solution is storing/reading info from a database so you don't have to manually fix the info if the bot goes offline. 
-*/ 
-
-var javaArray = ["Java Resources \n"]; 
-var cArray = ["C Resources \n"]; 
-var ccArray = ["C++ Resources \n"]; 
-var pythonArray = ["Python Resources \n"]; 
-var javascriptArray =["Javascript Resources \n"]; 
-var perlArray = ["Perl Resources \n"]; 
-var phpArray = ["PHP Resources \n"]; 
-var sqlArray = ["SQL Resources \n"]; 
-var extraArray = ["Extra Resources \n"]; 
-
-var allData = [javaArray, cArray, ccArray, pythonArray, javascriptArray, perlArray, phpArray, sqlArray, extraArray]; 
-
-
 bot.on('message', function (user, userID, channelID, message, evt) {
     if (message.substring(0, 1) == '&') {
         var args = message.substring(1).split(' ');
@@ -48,70 +41,27 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             case 'LIBRARY':
                 bot.sendMessage({
                     to: channelID,
-                    message: 'Opened resource library. Usage is & followed by a command. \n\nTo list resources for a certain language, (example) &Java. Current supported languages: Java, C, C++, Python, Javascript, Perl, PHP, SQL.\n There is an Extra section as well. (&Extra).\n\n To add a resource, usage is &info langauge hyperlink description(optional). Ex: &info Java example.com An example site. Library will list contributors for each resource.'
+                    message: 'Opened resource library. Usage is & followed by a command. \n\nTo list resources for a certain language, (example) &Java. Current supported languages: Java, C, C++, Python, Javascript, Perl, PHP, SQL.\n There is an Extra section as well. (&Extra).\n\n To add a resource, usage is &info langauge hyperlink description(optional). Ex: &info Java example.com An example site. Library will list contributors for each resource. \n\n Each row has an ID. To delete an entry, usage is &delete row_id.'
                 });
             break;
-            case 'JAVA':
-                sendMessage(channelID, readArray(javaArray)); 
-            break;
-            case 'C':
-                sendMessage(channelID, readArray(cArray)); 
-            break;
-            case 'C++':
-                sendMessage(channelID, readArray(ccArray)); 
-            break;
-            case 'PYTHON':
-                sendMessage(channelID, readArray(pythonArray)); 
-            break;
-            case 'JAVASCRIPT':
-                sendMessage(channelID, readArray(javascriptArray)); 
-            break;
-            case 'PERL':
-                sendMessage(channelID, readArray(perlArray)); 
-            break;
-            case 'PHP':
-                sendMessage(channelID, readArray(phpArray)); 
-            break;
-            case 'SQL':
-                sendMessage(channelID, readArray(sqlArray)); 
-            break;
-            case 'EXTRA':
-                sendMessage(channelID, readArray(extraArray)); 
+            case 'JAVA': case 'C': case 'C++': case 'PYTHON': case 'JAVASCRIPT': case 'PERL': case 'SQL': case 'PHP': case 'EXTRA': 
+                getQuery(cmd, channelID); 
             break;
             case 'INFO':
                 if(args.length >= 3) {
                     var choice = args[1].toUpperCase(); 
-                        switch(choice) {
-                            case 'JAVA':
-                                addResource(javaArray, args, user); 
-                            break;
-                            case 'C':
-                                addResource(cArray, args, user); 
-                            break;
-                            case 'C++':
-                                addResource(ccArray, args, user); 
-                            break;
-                            case 'PYTHON':
-                                addResource(pythonArray, args, user); 
-                            break;
-                            case 'JAVASCRIPT':
-                                addResource(javascriptArray, args, user); 
-                            break;
-                            case 'PERL':
-                                addResource(perlArray, args, user); 
-                            break;
-                            case 'PHP':
-                                addResource(phpArray, args, user); 
-                            break;
-                            case 'SQL':
-                                addResource(sqlArray, args, user); 
-                            break;
-                            case 'EXTRA':
-                                addResource(extraArray, args, user); 
-                            break;
-                        }
+                    var sql = "INSERT INTO resourcelibrary (CATEGORY, LINK, DESCRIPTION, USER) VALUES ('" + choice + "', '" + args[2] + "', '" + getDescription(args) + "', '*user: " + user + "');";
+                    con.query(sql, function (err, result) {
+                    if (err) throw err;
+                    console.log("1 record inserted");
+                    });
                 }
             break;
+            case 'DELETE':
+                if(args.length == 2) {
+                  deleteEntry(args[1]); 
+                }
+            break; 
          }
      }
 });
@@ -123,34 +73,37 @@ function sendMessage(channelID, text) {
     });
 }
 
-function readArray(tarray) {
-    var text =""; 
-    for(i = 0; i < tarray.length; i++) {
-        text += tarray[i] + '\n'; 
-    }
+//build the text query to send to chat 
+function getQuery(language, channelID) {
+    var text = language + " RESOURCES: \n\n"; 
+    con.query("SELECT * FROM resourcelibrary WHERE CATEGORY = '" + language + "'", function (err, result) {
+        if (err) throw err;
+        //build entries from the json 
+        for(i =0; i < result.length; i++) {
+          text += result[i].ID + "\n" + result[i].LINK + "\n" + result[i].DESCRIPTION + "\n" + result[i].USER + "\n\n"; 
+        }
+        sendMessage(channelID, text); 
+    });
     return text; 
 }
 
-function addResource(tarray, args, user){
-    tarray.push(args[2]); //the hyperlink
-    if (args.length > 3) { //a description was included 
-        var description = ""; 
+//build description string 
+function getDescription(args) {
+    var description = "*description: "; 
+    if(args.length > 3) {
         for(i = 3; i < args.length; i++) {
-            description += args[i] + " " ; 
+            description += args[i] + " "; 
         }
-        tarray.push("*description: " + description); //we want this italicized 
     }
-    tarray.push("*contributor: " + user + "\n"); 
+    return description;
 }
 
-//Writes to external file every minute. This is to ensure data is not lost if the bot goes offline (since this isn't in a database)
-function writeData() {
-    fs.writeFile("./test.txt", allData, function(err) {
-        if(err) {
-            return console.log(err);
-        }
-        console.log("The file was saved at " + new Date());
-    }); 
+//delete an entry, there is no provided edit function in this bot 
+function deleteEntry(idChoice) {
+  var sql = "DELETE FROM resourcelibrary WHERE ID = '" + idChoice + "'";
+  con.query(sql, function (err, result) {
+    if (err) throw err;
+    console.log("Number of records deleted: " + result.affectedRows);
+  });
 }
 
-setInterval(writeData, 60000); 
