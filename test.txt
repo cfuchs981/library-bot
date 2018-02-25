@@ -1,5 +1,5 @@
 Java Resources 
-,fuck.com,*description: this is an example. ,*contributor: clairester
+,example.com,*description: this is an example. ,*contributor: clairester
 ,C Resources 
 ,C++ Resources 
 ,Python Resources 
